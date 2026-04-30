@@ -9,6 +9,7 @@ import { useLanguageFromURL } from '@/hooks/useLanguageFromURL';
 import { useOAuthCallback } from '@/hooks/useOAuthCallback';
 import { StoreProvider } from '@/hooks/useStore';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
+import { LegacyAuthService } from '@/services/legacy-auth.service';
 import { initializeI18n, localize, TranslationProvider } from '@deriv-com/translations';
 import CoreStoreProvider from './CoreStoreProvider';
 import './app-root.scss';
@@ -74,6 +75,15 @@ function App() {
 
     // Handle account switching via URL parameter
     useAccountSwitching();
+
+    // Process legacy auth on mount
+    React.useEffect(() => {
+        const wasLegacyAuth = LegacyAuthService.checkAndHandleLegacyAuth();
+        if (wasLegacyAuth) {
+            // If it was legacy auth, we might need to reload or re-render to pick up the new state
+            window.location.reload();
+        }
+    }, []);
 
     // Process the authorization code when OAuth callback is valid
     React.useEffect(() => {

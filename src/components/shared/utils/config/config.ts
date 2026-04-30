@@ -67,6 +67,13 @@ export const getSocketURL = async (): Promise<string> => {
             return getDefaultServerURL();
         }
 
+        // [AI] - Handle Legacy tokens (starting with a1-)
+        // These tokens don't support the OTP-based WebSocket flow
+        if (authInfo.access_token.startsWith('a1-')) {
+            console.log('[DerivWS] Legacy token detected, using standard WebSocket URL');
+            return getDefaultServerURL();
+        }
+
         // Use the DerivWSAccountsService to get authenticated WebSocket URL
         const wsUrl = await DerivWSAccountsService.getAuthenticatedWebSocketURL(authInfo.access_token);
         return wsUrl;
