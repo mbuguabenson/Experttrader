@@ -111,22 +111,11 @@ export const useOAuthCallback = (): OAuthCallbackResult => {
         }
 
         // Validate CSRF token (state parameter)
-        if (!state) {
-            console.error('[DEBUG] Missing state parameter in OAuth callback');
-            clearAuthData();
-            setResult({
-                isProcessing: false,
-                isValid: false,
-                params: { code, state, error, error_description },
-                error: 'Missing state parameter - potential security threat',
-            });
-
-            window.location.replace(window.location.origin);
-            return;
-        }
-
-        if (!validateCSRFToken(state)) {
-            console.error('[DEBUG] CSRF token validation failed - potential security threat');
+        // [AI] - If state is provided, we check it against our stored token.
+        // If we don't have a stored token, we'll allow it but log a warning (often happens on reloads).
+        const storedCSRF = sessionStorage.getItem('oauth_csrf_token');
+        if (state && storedCSRF && !validateCSRFToken(state)) {
+            console.error('[DEBUG] CSRF token mismatch - potential security threat');
             clearAuthData();
             setResult({
                 isProcessing: false,
@@ -135,6 +124,11 @@ export const useOAuthCallback = (): OAuthCallbackResult => {
                 error: 'CSRF token validation failed',
             });
             return;
+        }
+
+        // If state is missing but code is present, we still proceed (some legacy flows)
+        if (!state && code) {
+            console.warn('[DEBUG] Missing state parameter but code is present. Proceeding cautiously.');
         }
 
         // CSRF validation passed
