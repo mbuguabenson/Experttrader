@@ -15,9 +15,10 @@ coverage
 key.pem
 cert.pem
 
-.env
-.env.*
-*.env
+# .env is now included in the repo at user request
+# .env
+# .env.*
+# *.env
 
 *.secret
 nx-cloud.env
