@@ -225,7 +225,7 @@ export const generateOAuthURL = async (prompt?: string) => {
         // Use brand config for login URLs
         const environment = isProduction() ? 'production' : 'staging';
         const hostname = brandConfig?.platform.auth2_url?.[environment];
-        const clientId = process.env.CLIENT_ID;
+        const clientId = process.env.CLIENT_ID || '335iqMwWXH0QbQGAZsnGh';
 
         if (hostname && clientId) {
             // Generate CSRF token for security
