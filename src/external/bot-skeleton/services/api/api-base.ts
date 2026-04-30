@@ -377,6 +377,15 @@ class APIBase {
                     is_virtual: account_type === 'real' ? 0 : 1,
                     balance: typeof balance?.balance === 'number' ? balance.balance : undefined,
                 },
+                // [AI] - Send full balance object for reactive UI updates
+                all_accounts_balance: {
+                    accounts: {
+                        [balance?.loginid]: {
+                            balance: balance?.balance,
+                            currency: balance?.currency,
+                        }
+                    }
+                }
             });
 
             // Update the WebSocket login ID in the client store

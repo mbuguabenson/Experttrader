@@ -42,9 +42,14 @@ export default class ClientStore {
     onAuthorizeEvent = (data: {
         account_list?: TAuthData['account_list'];
         current_account?: { loginid: string; currency: string; is_virtual: number; balance?: number };
+        all_accounts_balance?: Balance;
     }) => {
         if (data?.account_list) {
             this.setAccountList(data.account_list);
+        }
+
+        if (data?.all_accounts_balance) {
+            this.setAllAccountsBalance(data.all_accounts_balance);
         }
 
         // Update current account details from new API structure
