@@ -1,20 +1,11 @@
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
+import { isProduction, clearCodeVerifier, getCodeVerifier } from '@/utils/auth-helpers';
 import brandConfig from '../../../../../brand.config.json';
 
 // =============================================================================
 // Constants - Domain & Server Configuration (from brand.config.json)
 // =============================================================================
-
-// Production app domains
-export const PRODUCTION_DOMAINS = {
-    COM: brandConfig.platform.hostname.production.com,
-} as const;
-
-// Staging app domains
-export const STAGING_DOMAINS = {
-    COM: brandConfig.platform.hostname.staging.com,
-} as const;
 
 // WebSocket server URLs
 export const WS_SERVERS = {
@@ -22,19 +13,7 @@ export const WS_SERVERS = {
     PRODUCTION: `${brandConfig.platform.derivws.url.production}options/ws/public`,
 } as const;
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-// Helper to check if we're on production domains
-export const isProduction = () => {
-    const hostname = window.location.hostname;
-    const productionDomains = Object.values(PRODUCTION_DOMAINS) as string[];
-    return productionDomains.includes(hostname);
-};
-
-export const isLocal = () => /localhost(:\d+)?$/i.test(window.location.hostname);
-
+// Helper to get default server URL based on production check
 const getDefaultServerURL = () => {
     const isProductionEnv = isProduction();
 

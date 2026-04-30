@@ -1,4 +1,4 @@
-import { isProduction } from '@/components/shared';
+import { isProduction } from '@/utils/auth-helpers';
 import brandConfig from '../../brand.config.json';
 
 /**
