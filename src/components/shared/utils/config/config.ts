@@ -20,8 +20,8 @@ export {
 
 // WebSocket server URLs
 export const WS_SERVERS = {
-    STAGING: `${brandConfig.platform.derivws.url.staging}options/ws/public`,
-    PRODUCTION: `${brandConfig.platform.derivws.url.production}options/ws/public`,
+    STAGING: `${brandConfig.platform.derivws.url.staging}options/ws/public?app_id=${process.env.APP_ID || '113831'}`,
+    PRODUCTION: `${brandConfig.platform.derivws.url.production}options/ws/public?app_id=${process.env.APP_ID || '113831'}`,
 } as const;
 
 // Helper to get default server URL based on production check and active account
