@@ -65,8 +65,17 @@ export default class ClientStore {
 
     constructor(root_store: RootStore) {
         this.root_store = root_store;
-        // Subscribe to auth data changes
-        this.authDataSubscription = authData$.subscribe(() => {});
+        // Subscribe to auth data changes to keep ClientStore in sync with the API layer
+        this.authDataSubscription = authData$.subscribe(data => {
+            if (data) {
+                this.setLoginId(data.loginid);
+                this.setIsLoggedIn(true);
+                this.setAccountList(data.account_list);
+                if (typeof data.balance !== 'undefined') {
+                    this.setBalance(data.balance.toString());
+                }
+            }
+        });
 
         observer.register('api.authorize', this.onAuthorizeEvent);
 
