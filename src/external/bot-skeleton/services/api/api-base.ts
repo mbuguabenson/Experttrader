@@ -84,16 +84,9 @@ class APIBase {
         this.current_auth_subscriptions = [];
     };
 
-    onsocketopen() {
+    async onsocketopen() {
         setConnectionStatus(CONNECTION_STATUS.OPENED);
-
-        // Reset reconnection attempts on successful connection
         this.reconnection_attempts = 0;
-
-        const currentClientStore = globalObserver.getState('client.store');
-        if (currentClientStore) {
-            currentClientStore.setIsAccountRegenerating(false);
-        }
 
         this.handleTokenExchangeIfNeeded();
     }
@@ -172,6 +165,51 @@ class APIBase {
                 setIsAuthorizing(false);
             }
         }
+    async onsocketopen() {
+        setConnectionStatus(CONNECTION_STATUS.OPENED);
+        this.reconnection_attempts = 0;
+        await this.handleTokenExchangeIfNeeded();
+    }
+
+    setupObservers() {
+        if (!this.api) return;
+
+        // [AI] - Dedicated observer for all streaming messages
+        this.api.onMessage().subscribe(({ data }: any) => {
+            // Handle Balance Updates
+            if (data.msg_type === 'balance') {
+                const { balance } = data;
+                if (balance) {
+                    this.account_info = {
+                        balance: balance.balance,
+                        currency: balance.currency,
+                        loginid: balance.loginid,
+                    };
+
+                    globalObserver.emit('api.authorize', {
+                        current_account: {
+                            loginid: balance.loginid,
+                            currency: balance.currency,
+                            balance: balance.balance,
+                            is_virtual: balance.loginid.startsWith('VRT') ? 1 : 0,
+                        },
+                        all_accounts_balance: {
+                            accounts: {
+                                [balance.loginid]: {
+                                    balance: balance.balance,
+                                    currency: balance.currency,
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Handle Transaction Updates (Real-time trade history)
+            if (data.msg_type === 'transaction') {
+                globalObserver.emit('api.transaction', data.transaction);
+            }
+        });
     }
 
     onsocketclose() {
@@ -205,38 +243,8 @@ class APIBase {
             this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
             this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
 
-            // [AI] - Set up global message observer for balance updates
-            this.api?.onMessage().subscribe(({ data }: any) => {
-                if (data.msg_type === 'balance') {
-                    const { balance } = data;
-                    if (balance) {
-                        // Update local account info
-                        this.account_info = {
-                            balance: balance.balance,
-                            currency: balance.currency,
-                            loginid: balance.loginid,
-                        };
-
-                        // Broadcast to global stores
-                        globalObserver.emit('api.authorize', {
-                            current_account: {
-                                loginid: balance.loginid,
-                                currency: balance.currency,
-                                balance: balance.balance,
-                                is_virtual: balance.loginid.startsWith('VRT') ? 1 : 0,
-                            },
-                            all_accounts_balance: {
-                                accounts: {
-                                    [balance.loginid]: {
-                                        balance: balance.balance,
-                                        currency: balance.currency,
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-            });
+            // [AI] - Set up global stream observers (Mirroring Official Repo patterns)
+            this.setupObservers();
 
             // Store the current account ID used for this WebSocket connection
             // This will be used to check if we need to regenerate the connection when the tab becomes active
