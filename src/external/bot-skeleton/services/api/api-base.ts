@@ -302,21 +302,21 @@ class APIBase {
                 return { ...error, localizedMessage: errorMessage };
             }
 
-            const { balance } = authorize;
+            const { balance, currency, loginid } = authorize;
 
             this.account_info = {
-                balance: balance?.balance,
-                currency: balance?.currency,
-                loginid: balance?.loginid,
+                balance: balance,
+                currency: currency,
+                loginid: loginid,
             };
-            this.token = balance?.loginid;
+            this.token = loginid;
             
             // [AI] - Update the global account store with the latest balance
             const storedAccounts = DerivWSAccountsService.getStoredAccounts();
-            if (storedAccounts && balance?.loginid) {
+            if (storedAccounts && loginid) {
                 const updatedAccounts = storedAccounts.map(acc => {
-                    if (acc.account_id === balance.loginid) {
-                        return { ...acc, balance: String(balance.balance) };
+                    if (acc.account_id === loginid) {
+                        return { ...acc, balance: String(balance) };
                     }
                     return acc;
                 });
@@ -352,15 +352,14 @@ class APIBase {
 
             setAccountList(accountList); // Observable stream
             setAuthData({
-                balance: balance?.balance,
-                currency: balance?.currency,
-                loginid: balance?.loginid,
+                balance: balance,
+                currency: currency,
+                loginid: loginid,
                 is_virtual: account_type === 'real' ? 0 : 1,
                 account_list: accountList,
             });
 
             // // Set account_type in localStorage based on loginid prefix using centralized utility
-            const loginid = balance?.loginid || '';
             const isDemo = isDemoAccount(loginid);
 
             if (isDemo) {
@@ -372,17 +371,17 @@ class APIBase {
             globalObserver.emit('api.authorize', {
                 account_list: accountList,
                 current_account: {
-                    loginid: balance?.loginid,
-                    currency: balance?.currency || 'USD',
+                    loginid: loginid,
+                    currency: currency || 'USD',
                     is_virtual: account_type === 'real' ? 0 : 1,
-                    balance: typeof balance?.balance === 'number' ? balance.balance : undefined,
+                    balance: typeof balance === 'number' ? balance : undefined,
                 },
                 // [AI] - Send full balance object for reactive UI updates
                 all_accounts_balance: {
                     accounts: {
-                        [balance?.loginid]: {
-                            balance: balance?.balance,
-                            currency: balance?.currency,
+                        [loginid]: {
+                            balance: balance,
+                            currency: currency,
                         }
                     }
                 }
@@ -390,17 +389,17 @@ class APIBase {
 
             // Update the WebSocket login ID in the client store
             const currentClientStore = globalObserver.getState('client.store');
-            if (currentClientStore && balance?.loginid) {
-                currentClientStore.setWebSocketLoginId(balance.loginid);
+            if (currentClientStore && loginid) {
+                currentClientStore.setWebSocketLoginId(loginid);
             }
 
             setIsAuthorized(true);
             this.is_authorized = true;
             localStorage.setItem('client_account_details', JSON.stringify(accountList));
-            localStorage.setItem('client.country', balance?.country);
+            localStorage.setItem('client.country', authorize?.country);
 
-            if (balance?.loginid) {
-                localStorage.setItem('active_loginid', balance.loginid);
+            if (loginid) {
+                localStorage.setItem('active_loginid', loginid);
             }
 
             if (this.has_active_symbols) {
