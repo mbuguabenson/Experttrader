@@ -278,6 +278,18 @@ class APIBase {
                 loginid: balance?.loginid,
             };
             this.token = balance?.loginid;
+            
+            // [AI] - Update the global account store with the latest balance
+            const storedAccounts = DerivWSAccountsService.getStoredAccounts();
+            if (storedAccounts && balance?.loginid) {
+                const updatedAccounts = storedAccounts.map(acc => {
+                    if (acc.account_id === balance.loginid) {
+                        return { ...acc, balance: String(balance.balance) };
+                    }
+                    return acc;
+                });
+                DerivWSAccountsService.storeAccounts(updatedAccounts);
+            }
 
             const account_type = getAccountType(balance?.loginid);
             const currentAccount = balance?.loginid
