@@ -17,6 +17,7 @@ import {
     setConnectionStatus,
     setIsAuthorized,
     setIsAuthorizing,
+    setConnectionStatus as setGlobalConnectionStatus,
 } from './observables/connection-status-stream';
 import ApiHelpers from './api-helpers';
 import { generateDerivApiInstance, V2GetActiveAccountId } from './appId';
@@ -42,7 +43,7 @@ type TApiBaseApi = {
     authorize: (token: string) => Promise<{ authorize: TAuthData; error: unknown }>;
 
     onMessage: () => {
-        subscribe: (callback: (message: unknown) => void) => {
+        subscribe: (callback: (message: any) => void) => {
             unsubscribe: () => void;
         };
     };
@@ -53,7 +54,11 @@ class APIBase {
     token: string = '';
     account_id: string = '';
     pip_sizes = {};
-    account_info = {};
+    account_info = {
+        balance: 0,
+        currency: 'USD',
+        loginid: '',
+    };
     is_running = false;
     subscriptions: CurrentSubscription[] = [];
     time_interval: ReturnType<typeof setInterval> | null = null;
@@ -87,88 +92,12 @@ class APIBase {
     async onsocketopen() {
         setConnectionStatus(CONNECTION_STATUS.OPENED);
         this.reconnection_attempts = 0;
-
-        this.handleTokenExchangeIfNeeded();
+        await this.handleTokenExchangeIfNeeded();
     }
 
-    private async handleTokenExchangeIfNeeded() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const account_id = urlParams.get('account_id');
-        const accountType = urlParams.get('account_type');
-
-        if (account_id) {
-            localStorage.setItem('active_loginid', account_id);
-            // Remove account_id from URL after storing
-            removeUrlParameter('account_id');
-        }
-        if (accountType) {
-            localStorage.setItem('account_type', accountType);
-            // Remove account_type from URL after storing
-            removeUrlParameter('account_type');
-        }
-
-        // Check if we have an account_id from URL or localStorage
-        let activeAccountId: string | null = getAccountId();
-
-        // If no account_id in localStorage, check sessionStorage for accounts
-        if (!activeAccountId) {
-            try {
-                const storedAccounts = sessionStorage.getItem('deriv_accounts');
-                if (storedAccounts) {
-                    const accounts = JSON.parse(storedAccounts);
-                    if (accounts && accounts.length > 0 && accounts[0].account_id) {
-                        // Use the first account as default
-                        const accountId = accounts[0].account_id as string;
-                        activeAccountId = accountId;
-                        localStorage.setItem('active_loginid', accountId);
-
-                        // Set account type based on account_id prefix
-                        const isDemo = accountId.startsWith('VRT') || accountId.startsWith('VRTC');
-                        localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
-                    }
-                }
-            } catch (error) {
-                console.error('[APIBase] Error reading accounts from sessionStorage:', error);
-            }
-        }
-
-        // Now proceed with normal authorization if we have an account_id
-        if (activeAccountId) {
-            // [AI] - Retrieve token for the active account
-            let token = '';
-            try {
-                // Try accountsList (Legacy/Stored tokens)
-                const accountsListStr = localStorage.getItem('accountsList');
-                if (accountsListStr) {
-                    const accountsList = JSON.parse(accountsListStr);
-                    token = accountsList[activeAccountId] || '';
-                }
-
-                // If not found, try sessionStorage (Modern OAuth tokens)
-                if (!token) {
-                    const authInfoStr = sessionStorage.getItem('auth_info');
-                    if (authInfoStr) {
-                        const authInfo = JSON.parse(authInfoStr);
-                        token = authInfo.access_token || '';
-                    }
-                }
-            } catch (error) {
-                console.error('[APIBase] Error retrieving token:', error);
-            }
-
-            if (token) {
-                this.token = token;
-                setIsAuthorizing(true);
-                await this.authorizeAndSubscribe();
-            } else {
-                console.warn('[APIBase] No token found for active account:', activeAccountId);
-                setIsAuthorizing(false);
-            }
-        }
-    async onsocketopen() {
-        setConnectionStatus(CONNECTION_STATUS.OPENED);
-        this.reconnection_attempts = 0;
-        await this.handleTokenExchangeIfNeeded();
+    async onsocketclose() {
+        setConnectionStatus(CONNECTION_STATUS.CLOSED);
+        this.reconnectIfNotConnected();
     }
 
     setupObservers() {
@@ -212,9 +141,69 @@ class APIBase {
         });
     }
 
-    onsocketclose() {
-        setConnectionStatus(CONNECTION_STATUS.CLOSED);
-        this.reconnectIfNotConnected();
+    private async handleTokenExchangeIfNeeded() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const account_id = urlParams.get('account_id');
+        const accountType = urlParams.get('account_type');
+
+        if (account_id) {
+            localStorage.setItem('active_loginid', account_id);
+            removeUrlParameter('account_id');
+        }
+        if (accountType) {
+            localStorage.setItem('account_type', accountType);
+            removeUrlParameter('account_type');
+        }
+
+        let activeAccountId: string | null = getAccountId();
+
+        if (!activeAccountId) {
+            try {
+                const storedAccounts = sessionStorage.getItem('deriv_accounts');
+                if (storedAccounts) {
+                    const accounts = JSON.parse(storedAccounts);
+                    if (accounts && accounts.length > 0 && accounts[0].account_id) {
+                        const accountId = accounts[0].account_id as string;
+                        activeAccountId = accountId;
+                        localStorage.setItem('active_loginid', accountId);
+                        const isDemo = accountId.startsWith('VRT') || accountId.startsWith('VRTC');
+                        localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
+                    }
+                }
+            } catch (error) {
+                console.error('[APIBase] Error reading accounts from sessionStorage:', error);
+            }
+        }
+
+        if (activeAccountId) {
+            let token = '';
+            try {
+                const accountsListStr = localStorage.getItem('accountsList');
+                if (accountsListStr) {
+                    const accountsList = JSON.parse(accountsListStr);
+                    token = accountsList[activeAccountId] || '';
+                }
+
+                if (!token) {
+                    const authInfoStr = sessionStorage.getItem('auth_info');
+                    if (authInfoStr) {
+                        const authInfo = JSON.parse(authInfoStr);
+                        token = authInfo.access_token || '';
+                    }
+                }
+            } catch (error) {
+                console.error('[APIBase] Error retrieving token:', error);
+            }
+
+            if (token) {
+                this.token = token;
+                setIsAuthorizing(true);
+                await this.authorizeAndSubscribe();
+            } else {
+                console.warn('[APIBase] No token found for active account:', activeAccountId);
+                setIsAuthorizing(false);
+            }
+        }
     }
 
     async init(force_create_connection = false) {
@@ -224,7 +213,6 @@ class APIBase {
             this.unsubscribeAllSubscriptions();
         }
 
-        // Reset reconnection attempts counter on successful connection initialization
         if (!force_create_connection) {
             this.reconnection_attempts = 0;
         }
@@ -238,16 +226,13 @@ class APIBase {
                 this.api.connection.removeEventListener('close', this.onsocketclose.bind(this));
             }
 
-            this.api = await generateDerivApiInstance();
+            this.api = (await generateDerivApiInstance()) as TApiBaseApi;
 
             this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
             this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
 
-            // [AI] - Set up global stream observers (Mirroring Official Repo patterns)
             this.setupObservers();
 
-            // Store the current account ID used for this WebSocket connection
-            // This will be used to check if we need to regenerate the connection when the tab becomes active
             const currentClientStore = globalObserver.getState('client.store');
             if (currentClientStore) {
                 const active_login_id = getAccountId();
@@ -280,7 +265,6 @@ class APIBase {
     }
 
     terminate() {
-        // eslint-disable-next-line no-console
         if (this.api) this.api.disconnect();
     }
 
@@ -302,15 +286,10 @@ class APIBase {
             this.reconnection_attempts += 1;
 
             if (this.reconnection_attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-                // Reset reconnection counter
                 this.reconnection_attempts = 0;
-
-                // Properly handle logout through the API
                 setIsAuthorized(false);
                 setAccountList([]);
                 setAuthData(null);
-
-                // Clear necessary storage items
                 localStorage.removeItem('active_loginid');
                 localStorage.removeItem('account_type');
                 localStorage.removeItem('accountsList');
@@ -328,17 +307,14 @@ class APIBase {
         setIsAuthorizing(true);
 
         try {
-            // [AI] - MUST authorize before fetching balance or other data
             const { authorize, error } = await this.api.authorize(this.token);
 
             if (error) {
                 const errorMessage = isBackendError(error)
                     ? handleBackendError(error)
-                    : error.message || 'Authorization failed';
+                    : (error as any).message || 'Authorization failed';
 
-                // Authorization error
                 console.error('Authorization error:', errorMessage);
-
                 setIsAuthorizing(false);
                 return { ...error, localizedMessage: errorMessage };
             }
@@ -346,13 +322,12 @@ class APIBase {
             const { balance, currency, loginid } = authorize;
 
             this.account_info = {
-                balance: balance,
-                currency: currency,
-                loginid: loginid,
+                balance: balance as number,
+                currency: currency as string,
+                loginid: loginid as string,
             };
             this.token = loginid;
             
-            // [AI] - Update the global account store with the latest balance
             const storedAccounts = DerivWSAccountsService.getStoredAccounts();
             if (storedAccounts && loginid) {
                 const updatedAccounts = storedAccounts.map(acc => {
@@ -364,19 +339,16 @@ class APIBase {
                 DerivWSAccountsService.storeAccounts(updatedAccounts);
             }
 
-            const account_type = getAccountType(balance?.loginid);
-            const currentAccount = balance?.loginid
+            const account_type = getAccountType(loginid);
+            const currentAccount = loginid
                 ? {
-                      balance: balance.balance,
-                      currency: balance.currency || 'USD',
+                      balance: balance as number,
+                      currency: currency || 'USD',
                       is_virtual: account_type === 'real' ? 0 : 1,
-                      loginid: balance.loginid,
+                      loginid: loginid,
                   }
                 : null;
 
-            // Build full account list from sessionStorage (populated during OAuth flow)
-            // Falls back to just the current account if sessionStorage has no data
-            // (storedAccounts is already fetched and updated above)
             const accountList =
                 storedAccounts && storedAccounts.length > 0
                     ? storedAccounts
@@ -391,23 +363,16 @@ class APIBase {
                       ? [currentAccount]
                       : [];
 
-            setAccountList(accountList); // Observable stream
             setAuthData({
-                balance: balance,
-                currency: currency,
-                loginid: loginid,
+                balance: balance as number,
+                currency: currency as string,
+                loginid: loginid as string,
                 is_virtual: account_type === 'real' ? 0 : 1,
                 account_list: accountList,
             });
 
-            // // Set account_type in localStorage based on loginid prefix using centralized utility
             const isDemo = isDemoAccount(loginid);
-
-            if (isDemo) {
-                localStorage.setItem('account_type', 'demo');
-            } else {
-                localStorage.setItem('account_type', 'real');
-            }
+            localStorage.setItem('account_type', isDemo ? 'demo' : 'real');
 
             globalObserver.emit('api.authorize', {
                 account_list: accountList,
@@ -417,7 +382,6 @@ class APIBase {
                     is_virtual: account_type === 'real' ? 0 : 1,
                     balance: typeof balance === 'number' ? balance : undefined,
                 },
-                // [AI] - Send full balance object for reactive UI updates
                 all_accounts_balance: {
                     accounts: {
                         [loginid]: {
@@ -428,7 +392,6 @@ class APIBase {
                 }
             });
 
-            // Update the WebSocket login ID in the client store
             const currentClientStore = globalObserver.getState('client.store');
             if (currentClientStore && loginid) {
                 currentClientStore.setWebSocketLoginId(loginid);
@@ -437,7 +400,7 @@ class APIBase {
             setIsAuthorized(true);
             this.is_authorized = true;
             localStorage.setItem('client_account_details', JSON.stringify(accountList));
-            localStorage.setItem('client.country', authorize?.country);
+            localStorage.setItem('client.country', (authorize as any).country);
 
             if (loginid) {
                 localStorage.setItem('active_loginid', loginid);
@@ -469,7 +432,7 @@ class APIBase {
                     });
 
                     if (subscription) {
-                        this.current_auth_subscriptions.push(subscription);
+                        this.current_auth_subscriptions.push(subscription as any);
                     }
                     return subscription;
                 },
@@ -479,7 +442,6 @@ class APIBase {
         };
 
         const streamsToSubscribe = ['balance', 'transaction', 'proposal_open_contract'];
-
         await Promise.all(streamsToSubscribe.map(subscribeToStream));
     }
 
@@ -489,15 +451,12 @@ class APIBase {
         }
 
         try {
-            // Add timeout to prevent hanging
             const timeout = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Active symbols fetch timeout')), this.ACTIVE_SYMBOLS_TIMEOUT_MS)
             );
 
             const activeSymbolsPromise = doUntilDone(() => this.api?.send({ active_symbols: 'brief' }), [], this);
-
             const apiResult = await Promise.race([activeSymbolsPromise, timeout]);
-
             const { active_symbols = [], error = {} } = apiResult as any;
 
             if (error && Object.keys(error).length > 0) {
@@ -510,7 +469,6 @@ class APIBase {
 
             this.has_active_symbols = true;
 
-            // Process active symbols using the dedicated service with fallback
             try {
                 const enrichmentTimeout = new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('Enrichment timeout')), this.ENRICHMENT_TIMEOUT_MS)
@@ -523,7 +481,6 @@ class APIBase {
                 this.pip_sizes = processedResult.pipSizes;
             } catch (enrichmentError) {
                 console.warn('Symbol enrichment failed, using raw symbols:', enrichmentError);
-                // Fallback to raw symbols if enrichment fails
                 this.active_symbols = active_symbols;
                 this.pip_sizes = {};
             }
@@ -553,10 +510,7 @@ class APIBase {
     clearSubscriptions() {
         this.subscriptions.forEach(s => s.unsubscribe());
         this.subscriptions = [];
-
-        // Resetting timeout resolvers
         const global_timeouts = globalObserver.getState('global_timeouts') ?? [];
-
         global_timeouts.forEach((_: unknown, i: number) => {
             clearTimeout(i);
         });
