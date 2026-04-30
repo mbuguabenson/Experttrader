@@ -1,0 +1,90 @@
+@use 'components/shared/styles/constants' as *;
+@use 'components/shared/styles/mixins' as *;
+
+/** @define initial-loader */
+.initial-loader {
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    display: flex;
+    background: #13143a; // Experttrader navy background
+    z-index: 9999;
+
+    &--fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+    }
+
+    &__container {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    &__glowing-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            transparent 0%,
+            transparent 20%,
+            #00848c 50%,
+            #fec20f 80%,
+            transparent 100%
+        );
+        filter: blur(15px);
+        animation: rotate 2s linear infinite;
+        opacity: 0.6;
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            background: #13143a;
+            border-radius: 50%;
+        }
+    }
+
+    &__icon {
+        position: relative;
+        z-index: 2;
+        animation: pulse 2s ease-in-out infinite;
+
+        svg {
+            filter: drop-shadow(0 0 10px rgba(0, 132, 140, 0.5));
+        }
+    }
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
