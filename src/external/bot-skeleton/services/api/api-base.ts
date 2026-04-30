@@ -3,6 +3,7 @@ import { getAccountId, getAccountType, isDemoAccount, removeUrlParameter } from 
 /* [/AI] */
 import CommonStore from '@/stores/common-store';
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
+import { isProduction } from '@/utils/auth-helpers';
 import { TAuthData } from '@/types/api-types';
 import { clearAuthData } from '@/utils/auth-utils';
 import { handleBackendError, isBackendError } from '@/utils/error-handler';
@@ -303,7 +304,7 @@ class APIBase {
 
             // Build full account list from sessionStorage (populated during OAuth flow)
             // Falls back to just the current account if sessionStorage has no data
-            const storedAccounts = DerivWSAccountsService.getStoredAccounts();
+            // (storedAccounts is already fetched and updated above)
             const accountList =
                 storedAccounts && storedAccounts.length > 0
                     ? storedAccounts
