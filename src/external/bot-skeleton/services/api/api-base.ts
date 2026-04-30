@@ -141,8 +141,36 @@ class APIBase {
 
         // Now proceed with normal authorization if we have an account_id
         if (activeAccountId) {
-            setIsAuthorizing(true);
-            await this.authorizeAndSubscribe();
+            // [AI] - Retrieve token for the active account
+            let token = '';
+            try {
+                // Try accountsList (Legacy/Stored tokens)
+                const accountsListStr = localStorage.getItem('accountsList');
+                if (accountsListStr) {
+                    const accountsList = JSON.parse(accountsListStr);
+                    token = accountsList[activeAccountId] || '';
+                }
+
+                // If not found, try sessionStorage (Modern OAuth tokens)
+                if (!token) {
+                    const authInfoStr = sessionStorage.getItem('auth_info');
+                    if (authInfoStr) {
+                        const authInfo = JSON.parse(authInfoStr);
+                        token = authInfo.access_token || '';
+                    }
+                }
+            } catch (error) {
+                console.error('[APIBase] Error retrieving token:', error);
+            }
+
+            if (token) {
+                this.token = token;
+                setIsAuthorizing(true);
+                await this.authorizeAndSubscribe();
+            } else {
+                console.warn('[APIBase] No token found for active account:', activeAccountId);
+                setIsAuthorizing(false);
+            }
         }
     }
 
