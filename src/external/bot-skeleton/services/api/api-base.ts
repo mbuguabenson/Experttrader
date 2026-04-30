@@ -287,7 +287,8 @@ class APIBase {
         setIsAuthorizing(true);
 
         try {
-            const { balance, error } = await this.api.balance();
+            // [AI] - MUST authorize before fetching balance or other data
+            const { authorize, error } = await this.api.authorize(this.token);
 
             if (error) {
                 const errorMessage = isBackendError(error)
@@ -300,6 +301,8 @@ class APIBase {
                 setIsAuthorizing(false);
                 return { ...error, localizedMessage: errorMessage };
             }
+
+            const { balance } = authorize;
 
             this.account_info = {
                 balance: balance?.balance,
