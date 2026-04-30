@@ -29,7 +29,9 @@ const AppHeader = observer(() => {
     // suppress the short fallback timeout and keep the spinner throughout.
     const [isOAuthPending, setIsOAuthPending] = useState(() => {
         const params = new URLSearchParams(window.location.search);
-        return Boolean(params.get('code') && params.get('state'));
+        const hasModernCode = Boolean(params.get('code') && params.get('state'));
+        const hasLegacyTokens = Boolean(params.get('acct1') && params.get('token1'));
+        return hasModernCode || hasLegacyTokens;
     });
 
     const { data: activeAccount } = useActiveAccount({
@@ -73,7 +75,7 @@ const AppHeader = observer(() => {
                 setAuthTimeout(true);
                 setIsAuthorizing(false);
             }
-        }, 5000);
+        }, 10000);
 
         if (activeLoginid || !isAuthorizing) {
             if (authTimeout) setAuthTimeout(false);
