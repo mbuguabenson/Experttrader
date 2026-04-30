@@ -1,10 +1,20 @@
 import { DerivWSAccountsService } from '@/services/derivws-accounts.service';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
-import { isProduction, clearCodeVerifier, getCodeVerifier } from '@/utils/auth-helpers';
+import { isProduction } from '@/utils/auth-helpers';
 import brandConfig from '../../../../../brand.config.json';
 
+// Export these for backward compatibility in imports
+export { 
+    isProduction, 
+    isLocal, 
+    validateCSRFToken, 
+    clearCSRFToken, 
+    clearCodeVerifier, 
+    getCodeVerifier 
+} from '@/utils/auth-helpers';
+
 // =============================================================================
-// Constants - Domain & Server Configuration (from brand.config.json)
+// Constants - Server Configuration
 // =============================================================================
 
 // WebSocket server URLs
@@ -16,27 +26,11 @@ export const WS_SERVERS = {
 // Helper to get default server URL based on production check
 const getDefaultServerURL = () => {
     const isProductionEnv = isProduction();
-
-    try {
-        return isProductionEnv ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
-    } catch (error) {
-        console.error('Error in getDefaultServerURL:', error);
-    }
-
-    // Production defaults to demov2, staging/preview defaults to qa194 (demo)
     return isProductionEnv ? WS_SERVERS.PRODUCTION : WS_SERVERS.STAGING;
 };
 
 /**
  * Gets the WebSocket URL using the new authenticated flow
- * This function orchestrates the complete flow:
- * 1. Get access token from auth_info
- * 2. Fetch accounts list from derivatives/accounts
- * 3. Store accounts in sessionStorage
- * 4. Get default account (first from list)
- * 5. Fetch OTP and WebSocket URL for that account
- *
- * @returns Promise with WebSocket URL or fallback to default server
  */
 export const getSocketURL = async (): Promise<string> => {
     try {
@@ -46,10 +40,8 @@ export const getSocketURL = async (): Promise<string> => {
             return getDefaultServerURL();
         }
 
-        // [AI] - Handle Legacy tokens (starting with a1-)
-        // These tokens don't support the OTP-based WebSocket flow
+        // Handle Legacy tokens (starting with a1-)
         if (authInfo.access_token.startsWith('a1-')) {
-            console.log('[DerivWS] Legacy token detected, using standard WebSocket URL');
             return getDefaultServerURL();
         }
 
@@ -63,199 +55,11 @@ export const getSocketURL = async (): Promise<string> => {
 };
 
 export const getDebugServiceWorker = () => {
-    const debug_service_worker_flag = window.localStorage.getItem('debug_service_worker');
-    if (debug_service_worker_flag) return !!parseInt(debug_service_worker_flag);
-
-    return false;
+    const flag = window.localStorage.getItem('debug_service_worker');
+    return flag ? !!parseInt(flag) : false;
 };
 
-/**
- * Generates a cryptographically secure CSRF token
- * @returns A random base64url-encoded string
- */
-const generateCSRFToken = (): string => {
-    // Generate 32 random bytes (256 bits) for strong security
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-
-    // Convert to base64url encoding (URL-safe)
-    const base64 = btoa(String.fromCharCode(...array));
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-};
-
-/**
- * Generates a PKCE code verifier (random string)
- * @returns A cryptographically random base64url-encoded string (43-128 characters)
- */
-const generateCodeVerifier = (): string => {
-    // Generate 32 random bytes (will result in 43 characters after base64url encoding)
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-
-    // Convert to base64url encoding (URL-safe, no padding)
-    const base64 = btoa(String.fromCharCode(...array));
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-};
-
-/**
- * Generates a PKCE code challenge from a code verifier using SHA-256
- * @param verifier The code verifier string
- * @returns Promise that resolves to the base64url-encoded SHA-256 hash
- */
-const generateCodeChallenge = async (verifier: string): Promise<string> => {
-    // Encode the verifier as UTF-8
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-
-    // Hash with SHA-256
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-
-    // Convert to base64url encoding
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const base64 = btoa(String.fromCharCode(...hashArray));
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-};
-
-/**
- * Stores PKCE code verifier in sessionStorage for token exchange
- * @param verifier The code verifier to store
- */
-const storeCodeVerifier = (verifier: string): void => {
-    sessionStorage.setItem('oauth_code_verifier', verifier);
-    // Also store timestamp for verifier expiration (e.g., 10 minutes)
-    sessionStorage.setItem('oauth_code_verifier_timestamp', Date.now().toString());
-};
-
-/**
- * Retrieves and validates the stored PKCE code verifier
- * @returns The code verifier if valid and not expired, null otherwise
- */
-export const getCodeVerifier = (): string | null => {
-    const verifier = sessionStorage.getItem('oauth_code_verifier');
-    const timestamp = sessionStorage.getItem('oauth_code_verifier_timestamp');
-
-    if (!verifier || !timestamp) {
-        return null;
-    }
-
-    // Check if verifier is expired (10 minutes = 600000ms)
-    const verifierAge = Date.now() - parseInt(timestamp, 10);
-    if (verifierAge > 600000) {
-        // Clean up expired verifier
-        sessionStorage.removeItem('oauth_code_verifier');
-        sessionStorage.removeItem('oauth_code_verifier_timestamp');
-        return null;
-    }
-
-    return verifier;
-};
-
-/**
- * Clears PKCE code verifier from sessionStorage after successful token exchange
- */
-export const clearCodeVerifier = (): void => {
-    sessionStorage.removeItem('oauth_code_verifier');
-    sessionStorage.removeItem('oauth_code_verifier_timestamp');
-};
-
-/**
- * Stores CSRF token in sessionStorage for validation after OAuth callback
- * @param token The CSRF token to store
- */
-const storeCSRFToken = (token: string): void => {
-    sessionStorage.setItem('oauth_csrf_token', token);
-    // Also store timestamp for token expiration (e.g., 10 minutes)
-    sessionStorage.setItem('oauth_csrf_token_timestamp', Date.now().toString());
-};
-
-/**
- * Validates CSRF token from OAuth callback
- * @param token The token to validate
- * @returns true if token is valid and not expired
- */
-export const validateCSRFToken = (token: string): boolean => {
-    const storedToken = sessionStorage.getItem('oauth_csrf_token');
-    const timestamp = sessionStorage.getItem('oauth_csrf_token_timestamp');
-
-    if (!storedToken || !timestamp) {
-        return false;
-    }
-
-    // Check if token matches
-    if (storedToken !== token) {
-        return false;
-    }
-
-    // Check if token is expired (10 minutes = 600000ms)
-    const tokenAge = Date.now() - parseInt(timestamp, 10);
-    if (tokenAge > 600000) {
-        // Clean up expired token
-        sessionStorage.removeItem('oauth_csrf_token');
-        sessionStorage.removeItem('oauth_csrf_token_timestamp');
-        return false;
-    }
-
-    return true;
-};
-
-/**
- * Clears CSRF token from sessionStorage after successful validation
- */
-export const clearCSRFToken = (): void => {
-    sessionStorage.removeItem('oauth_csrf_token');
-    sessionStorage.removeItem('oauth_csrf_token_timestamp');
-};
-
+// OAuth URL generation moved to OAuthTokenExchangeService to avoid circularity
 export const generateOAuthURL = async (prompt?: string) => {
-    try {
-        // Use brand config for login URLs
-        const environment = isProduction() ? 'production' : 'staging';
-        const hostname = brandConfig?.platform.auth2_url?.[environment];
-        const clientId = process.env.CLIENT_ID || '335iqMwWXH0QbQGAZsnGh';
-
-        if (hostname && clientId) {
-            // Generate CSRF token for security
-            const csrfToken = generateCSRFToken();
-
-            // Store token for validation after callback
-            storeCSRFToken(csrfToken);
-
-            // Generate PKCE parameters
-            const codeVerifier = generateCodeVerifier();
-            const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-            // Store code verifier for token exchange
-            storeCodeVerifier(codeVerifier);
-
-            // Build redirect URL
-            const protocol = window.location.protocol;
-            const host = window.location.host;
-            const redirectUrl = `${protocol}//${host}`;
-            const scopes = 'trade';
-
-            // Build OAuth URL with PKCE parameters
-            // - state: CSRF token for security
-            // - code_challenge: SHA-256 hash of code_verifier
-            // - code_challenge_method: S256 (SHA-256)
-            let oauthUrl = `${hostname}auth?scope=${scopes}&response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${csrfToken}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-
-            // Optional: prompt parameter (e.g. 'registration' for signup flow)
-            if (prompt) {
-                oauthUrl += `&prompt=${encodeURIComponent(prompt)}`;
-            }
-
-            // Optional: legacy app_id for routing users on the Legacy Deriv API platform
-            const appId = process.env.APP_ID;
-            if (appId) {
-                oauthUrl += `&app_id=${encodeURIComponent(appId)}`;
-            }
-
-            return oauthUrl;
-        }
-    } catch (error) {
-        console.error('Error generating OAuth URL:', error);
-    }
-
-    // Fallback to hardcoded URLs if brand config fails
-    return ``;
+    return OAuthTokenExchangeService.generateOAuthURL(prompt);
 };

@@ -333,4 +333,55 @@ export class OAuthTokenExchangeService {
             };
         }
     }
+    /**
+     * Generates the OAuth2 authorization URL
+     * @param prompt - Optional prompt parameter (e.g., 'registration')
+     * @returns Promise with authorization URL
+     */
+    static async generateOAuthURL(prompt?: string): Promise<string> {
+        try {
+            const { 
+                isProduction, 
+                generateCSRFToken, 
+                storeCSRFToken, 
+                generateCodeVerifier, 
+                generateCodeChallenge, 
+                storeCodeVerifier 
+            } = await import('@/utils/auth-helpers');
+
+            const environment = isProduction() ? 'production' : 'staging';
+            const hostname = brandConfig?.platform.auth2_url?.[environment];
+            const clientId = process.env.CLIENT_ID || '335iqMwWXH0QbQGAZsnGh';
+
+            if (hostname && clientId) {
+                const csrfToken = generateCSRFToken();
+                storeCSRFToken(csrfToken);
+
+                const codeVerifier = generateCodeVerifier();
+                const codeChallenge = await generateCodeChallenge(codeVerifier);
+                storeCodeVerifier(codeVerifier);
+
+                const protocol = window.location.protocol;
+                const host = window.location.host;
+                const redirectUrl = `${protocol}//${host}`;
+                const scopes = 'trade';
+
+                let oauthUrl = `${hostname}auth?scope=${scopes}&response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${csrfToken}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
+                if (prompt) {
+                    oauthUrl += `&prompt=${encodeURIComponent(prompt)}`;
+                }
+
+                const appId = process.env.APP_ID;
+                if (appId) {
+                    oauthUrl += `&app_id=${encodeURIComponent(appId)}`;
+                }
+
+                return oauthUrl;
+            }
+        } catch (error) {
+            ErrorLogger.error('OAuth', 'Error generating OAuth URL', error);
+        }
+        return '';
+    }
 }
