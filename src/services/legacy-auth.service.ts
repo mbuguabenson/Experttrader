@@ -51,7 +51,18 @@ export class LegacyAuthService {
             // 2. Store tokens in the legacy format expected by bot-skeleton/appId.js
             localStorage.setItem('accountsList', JSON.stringify(accountsListMap));
 
-            // 3. Set active account (usually the first one)
+            // 3. Store account details in clientAccounts for ClientStore and Header
+            const clientAccountsMap: Record<string, any> = {};
+            accounts.forEach(acc => {
+                clientAccountsMap[acc.account_id] = {
+                    currency: acc.currency,
+                    account_type: acc.account_type,
+                    token: accountsListMap[acc.account_id]
+                };
+            });
+            localStorage.setItem('clientAccounts', JSON.stringify(clientAccountsMap));
+
+            // 4. Set active account (usually the first one)
             const firstAccount = accounts[0];
             localStorage.setItem('active_loginid', firstAccount.account_id);
             localStorage.setItem('account_type', firstAccount.account_type);
