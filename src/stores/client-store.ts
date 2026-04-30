@@ -56,15 +56,14 @@ export default class ClientStore {
         if (data?.current_account) {
             this.setLoginId(data.current_account.loginid);
             this.setCurrency(data.current_account.currency);
+            if (typeof data.current_account.balance === 'number') {
+                this.setBalance(data.current_account.balance.toString());
+            }
             this.setIsLoggedIn(true);
             localStorage.setItem('active_loginid', data.current_account.loginid);
 
             // Store the login ID used for WebSocket connection
             this.setWebSocketLoginId(data.current_account.loginid);
-
-            if (typeof data.current_account.balance === 'number') {
-                this.setBalance(data.current_account.balance.toString());
-            }
         }
     };
 
