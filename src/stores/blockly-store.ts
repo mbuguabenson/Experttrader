@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from 'mobx';
+import { action, computed, makeObservable, observable, runInAction } from 'mobx';
 import { tabs_title } from '@/constants/bot-contents';
 import { getSavedWorkspaces, onWorkspaceResize } from '@/external/bot-skeleton';
 import { getSetting, storeSetting } from '@/utils/settings';
@@ -50,10 +50,14 @@ export default class BlocklyStore {
         try {
             const workspaces = await getSavedWorkspaces();
             // Use action to update observable property
-            this._has_saved_bots = Array.isArray(workspaces) && workspaces.length > 0;
+            runInAction(() => {
+                this._has_saved_bots = Array.isArray(workspaces) && workspaces.length > 0;
+            });
         } catch (e) {
             console.error('Error checking for saved workspaces:', e);
-            this._has_saved_bots = false;
+            runInAction(() => {
+                this._has_saved_bots = false;
+            });
         }
     };
 

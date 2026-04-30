@@ -63,8 +63,12 @@ export default class GoogleDriveStore {
         this.client = null;
         this.access_token = localStorage.getItem('google_access_token') ?? '';
         setTimeout(() => {
-            importExternal('https://accounts.google.com/gsi/client').then(() => this.initialiseClient());
-            importExternal('https://apis.google.com/js/api.js').then(() => this.initialise());
+            if (this.client_id) {
+                importExternal('https://accounts.google.com/gsi/client').then(() => this.initialiseClient());
+                importExternal('https://apis.google.com/js/api.js').then(() => this.initialise());
+            } else {
+                console.warn('[GoogleDrive] GD_CLIENT_ID is missing. Google Drive integration will be disabled.');
+            }
         }, 3000);
     }
 
