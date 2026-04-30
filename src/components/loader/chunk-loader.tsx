@@ -1,10 +1,6 @@
-import { Loader } from '@deriv-com/ui';
+import React from 'react';
+import Loading from '../shared_ui/loading/loading';
 
 export default function ChunkLoader({ message }: { message: string }) {
-    return (
-        <div className='app-root'>
-            <Loader />
-            <div className='load-message'>{message}</div>
-        </div>
-    );
+    return <Loading is_fullscreen status={[message]} is_slow_loading={!!message} />;
 }
