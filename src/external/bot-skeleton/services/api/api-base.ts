@@ -205,6 +205,39 @@ class APIBase {
             this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
             this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
 
+            // [AI] - Set up global message observer for balance updates
+            this.api?.onMessage().subscribe(({ data }: any) => {
+                if (data.msg_type === 'balance') {
+                    const { balance } = data;
+                    if (balance) {
+                        // Update local account info
+                        this.account_info = {
+                            balance: balance.balance,
+                            currency: balance.currency,
+                            loginid: balance.loginid,
+                        };
+
+                        // Broadcast to global stores
+                        globalObserver.emit('api.authorize', {
+                            current_account: {
+                                loginid: balance.loginid,
+                                currency: balance.currency,
+                                balance: balance.balance,
+                                is_virtual: balance.loginid.startsWith('VRT') ? 1 : 0,
+                            },
+                            all_accounts_balance: {
+                                accounts: {
+                                    [balance.loginid]: {
+                                        balance: balance.balance,
+                                        currency: balance.currency,
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+
             // Store the current account ID used for this WebSocket connection
             // This will be used to check if we need to regenerate the connection when the tab becomes active
             const currentClientStore = globalObserver.getState('client.store');
