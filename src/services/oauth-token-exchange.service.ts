@@ -340,45 +340,28 @@ export class OAuthTokenExchangeService {
      */
     static async generateOAuthURL(prompt?: string): Promise<string> {
         try {
-            const { 
-                isProduction, 
-                generateCSRFToken, 
-                storeCSRFToken, 
-                generateCodeVerifier, 
-                generateCodeChallenge, 
-                storeCodeVerifier 
-            } = await import('@/utils/auth-helpers');
+            const { isProduction } = await import('@/utils/auth-helpers');
 
+            // [AI] - Using Legacy App ID flow to get tokens directly in the URL (acct1, token1, etc.)
+            // This matches the user's preference for a direct redirect with tokens.
+            const appId = process.env.APP_ID || '113831';
             const environment = isProduction() ? 'production' : 'staging';
-            const hostname = brandConfig?.platform.auth2_url?.[environment];
-            const clientId = process.env.CLIENT_ID || '335iqMwWXH0QbQGAZsnGh';
+            
+            // Base URL for Deriv OAuth
+            const oauthUrl = isProduction() 
+                ? 'https://oauth.deriv.com/oauth2/authorize'
+                : 'https://staging-oauth.deriv.com/oauth2/authorize';
 
-            if (hostname && clientId) {
-                const csrfToken = generateCSRFToken();
-                storeCSRFToken(csrfToken);
+            const url = new URL(oauthUrl);
+            url.searchParams.append('app_id', appId);
+            url.searchParams.append('l', 'en'); // Language
+            url.searchParams.append('brand', 'experttrader');
 
-                const codeVerifier = generateCodeVerifier();
-                const codeChallenge = await generateCodeChallenge(codeVerifier);
-                storeCodeVerifier(codeVerifier);
-
-                const protocol = window.location.protocol;
-                const host = window.location.host;
-                const redirectUrl = `${protocol}//${host}`;
-                const scopes = 'trade';
-
-                let oauthUrl = `${hostname}auth?scope=${scopes}&response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${csrfToken}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-
-                if (prompt) {
-                    oauthUrl += `&prompt=${encodeURIComponent(prompt)}`;
-                }
-
-                const appId = process.env.APP_ID;
-                if (appId) {
-                    oauthUrl += `&app_id=${encodeURIComponent(appId)}`;
-                }
-
-                return oauthUrl;
+            if (prompt) {
+                url.searchParams.append('prompt', prompt);
             }
+
+            return url.toString();
         } catch (error) {
             ErrorLogger.error('OAuth', 'Error generating OAuth URL', error);
         }
