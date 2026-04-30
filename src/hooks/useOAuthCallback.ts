@@ -82,8 +82,9 @@ export const useOAuthCallback = (): OAuthCallbackResult => {
         const error = urlParams.get('error');
         const error_description = urlParams.get('error_description');
 
-        // Check if this is an OAuth callback (has code or error parameter)
-        const isOAuthCallback = code !== null || error !== null || state !== null;
+        // Check if this is an OAuth callback (must have code or error parameter)
+        // Note: state alone is not enough to trigger the callback flow
+        const isOAuthCallback = code !== null || error !== null;
 
         if (!isOAuthCallback) {
             // Not an OAuth callback, mark as complete
